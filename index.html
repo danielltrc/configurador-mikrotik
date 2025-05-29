@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Configuração MikroTik</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .section-title {
+            background-color: #3498db;
+            color: white;
+            padding: 8px 12px;
+            margin: 20px 0 10px 0;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            display: block;
+            margin: 20px auto;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            display: none;
+        }
+        .required:after {
+            content: " *";
+            color: red;
+        }
+        .error {
+            color: red;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gerador de Configuração MikroTik</h1>
+        
+        <div class="form-group">
+            <label for="uplink_interface" class="required">1. Interface Uplink</label>
+            <input type="text" id="uplink_interface" placeholder="ex: ether1">
+        </div>
+        
+        <div class="form-group">
+            <label for="customer_interface" class="required">2. Interface Cliente</label>
+            <input type="text" id="customer_interface" placeholder="ex: ether2">
+        </div>
+        
+        <div class="section-title">CONFIGURAÇÃO IPv4</div>
+        
+        <div class="form-group">
+            <label for="ipv4_cliente" class="required">3. Endereço IPv4 do Cliente</label>
+            <input type="text" id="ipv4_cliente" placeholder="ex: 192.168.1.1/30">
+            <div id="ipv4_error" class="error"></div>
+        </div>
+        
+        <div class="section-title">CONFIGURAÇÃO IPv6</div>
+        
+        <div class="form-group">
+            <label for="ipv6_cliente">4. Endereço IPv6 do Cliente (opcional)</label>
+            <input type="text" id="ipv6_cliente" placeholder="ex: fe80::1/64">
+            <div id="ipv6_error" class="error"></div>
+        </div>
+        
+        <div class="section-title">CONFIGURAÇÃO DO CLIENTE</div>
+        
+        <div class="form-group">
+            <label for="public_ip_client" class="required">5. IP Público do Cliente</label>
+            <input type="text" id="public_ip_client" placeholder="ex: 200.100.50.25">
+            <div id="public_ip_error" class="error"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="ipv6_prefix_client">6. Prefixo IPv6 do Cliente (opcional)</label>
+            <input type="text" id="ipv6_prefix_client" placeholder="ex: 2001:db8:abcd::/64">
+            <div id="ipv6_prefix_error" class="error"></div>
+        </div>
+        
+        <div class="section-title">IDENTIFICAÇÃO</div>
+        
+        <div class="form-group">
+            <label for="location_code" class="required">7. Código da Localização</label>
+            <input type="text" id="location_code" placeholder="3 letras, ex: FLN" maxlength="3">
+            <div id="location_code_error" class="error"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="city" class="required">8. Nome da Cidade</label>
+            <input type="text" id="city" placeholder="ex: TERESINA">
+            <div id="city_error" class="error"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="task" class="required">9. Número da Tarefa</label>
+            <input type="text" id="task" placeholder="apenas números">
+            <div id="task_error" class="error"></div>
+        </div>
+        
+        <button id="generate-btn">Gerar Configuração</button>
+        
+        <div id="result"></div>
+        <div id="success" class="success"></div>
+        
+        <button id="download-btn" style="display: none;">Baixar Configuração</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateBtn = document.getElementById('generate-btn');
+            const downloadBtn = document.getElementById('download-btn');
+            const resultDiv = document.getElementById('result');
+            const successDiv = document.getElementById('success');
+            
+            generateBtn.addEventListener('click', generateConfig);
+            downloadBtn.addEventListener('click', downloadConfig);
+            
+            function validateIPv4(ip) {
+                try {
+                    const [address, prefix] = ip.split('/');
+                    if (!address || !prefix) return false;
+                    
+                    const parts = address.split('.');
+                    if (parts.length !== 4) return false;
+                    
+                    for (const part of parts) {
+                        const num = parseInt(part, 10);
+                        if (isNaN(num) || num < 0 || num > 255) return false;
+                    }
+                    
+                    const prefixNum = parseInt(prefix, 10);
+                    if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 32) return false;
+                    
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+            
+            function validateIPv6(ip) {
+                if (!ip) return true; // optional field
+                
+                try {
+                    const [address, prefix] = ip.split('/');
+                    if (!address || !prefix) return false;
+                    
+                    const prefixNum = parseInt(prefix, 10);
+                    if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 128) return false;
+                    
+                    // Basic IPv6 validation (simplified)
+                    const parts = address.split(':');
+                    if (parts.length < 3 || parts.length > 8) return false;
+                    
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+            
+            function validateIP(ip) {
+                if (!ip) return false;
+                return validateIPv4(ip) || validateIPv6(ip);
+            }
+            
+            function calculateNetworkAndGateway(ipAddress) {
+                if (!ipAddress) return null;
+                
+                try {
+                    // IPv4 handling
+                    if (ipAddress.includes('.')) {
+                        const [ip, prefix] = ipAddress.split('/');
+                        const prefixNum = parseInt(prefix, 10);
+                        
+                        const ipParts = ip.split('.').map(Number);
+                        const ipNumber = (ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3];
+                        
+                        const mask = 0xFFFFFFFF << (32 - prefixNum);
+                        const networkNumber = ipNumber & mask;
+                        
+                        const networkAddress = [
+                            (networkNumber >>> 24) & 0xFF,
+                            (networkNumber >>> 16) & 0xFF,
+                            (networkNumber >>> 8) & 0xFF,
+                            networkNumber & 0xFF
+                        ].join('.');
+                        
+                        const gatewayNumber = networkNumber + 1;
+                        const gatewayAddress = [
+                            (gatewayNumber >>> 24) & 0xFF,
+                            (gatewayNumber >>> 16) & 0xFF,
+                            (gatewayNumber >>> 8) & 0xFF,
+                            gatewayNumber & 0xFF
+                        ].join('.');
+                        
+                        return {
+                            network: networkAddress,
+                            gateway: gatewayAddress
+                        };
+                    }
+                    
+                    // IPv6 handling (simplified)
+                    return {
+                        network: ipAddress.split('/')[0],
+                        gateway: ipAddress.split('/')[0]
+                    };
+                } catch (e) {
+                    console.error("Error calculating network/gateway:", e);
+                    return null;
+                }
+            }
+            
+            function generateConfig() {
+                // Reset errors
+                document.querySelectorAll('.error').forEach(el => el.textContent = '');
+                
+                // Get values
+                const uplink_interface = document.getElementById('uplink_interface').value.trim();
+                const customer_interface = document.getElementById('customer_interface').value.trim();
+                const ipv4_cliente = document.getElementById('ipv4_cliente').value.trim();
+                const ipv6_cliente = document.getElementById('ipv6_cliente').value.trim() || null;
+                const public_ip_client = document.getElementById('public_ip_client').value.trim();
+                const ipv6_prefix_client = document.getElementById('ipv6_prefix_client').value.trim() || null;
+                const location_code = document.getElementById('location_code').value.trim().toUpperCase();
+                const city = document.getElementById('city').value.trim().toUpperCase();
+                const task = document.getElementById('task').value.trim();
+                
+                // Validate required fields
+                let isValid = true;
+                
+                if (!uplink_interface) {
+                    document.getElementById('uplink_interface').nextElementSibling.textContent = 'Campo obrigatório!';
+                    isValid = false;
+                }
+                
+                if (!customer_interface) {
+                    document.getElementById('customer_interface').nextElementSibling.textContent = 'Campo obrigatório!';
+                    isValid = false;
+                }
+                
+                if (!ipv4_cliente) {
+                    document.getElementById('ipv4_error').textContent = 'Campo obrigatório!';
+                    isValid = false;
+                } else if (!validateIPv4(ipv4_cliente)) {
+                    document.getElementById('ipv4_error').textContent = 'Formato IPv4 inválido. Exemplo: 192.168.1.1/30';
+                    isValid = false;
+                }
+                
+                if (ipv6_cliente && !validateIPv6(ipv6_cliente)) {
+                    document.getElementById('ipv6_error').textContent = 'Formato IPv6 inválido. Exemplo: fe80::1/64';
+                    isValid = false;
+                }
+                
+                if (!public_ip_client) {
+                    document.getElementById('public_ip_error').textContent = 'Campo obrigatório!';
+                    isValid = false;
+                } else if (!validateIPv4(public_ip_client) && !validateIPv6(public_ip_client)) {
+                    document.getElementById('public_ip_error').textContent = 'Formato de IP inválido';
+                    isValid = false;
+                }
+                
+                if (ipv6_prefix_client && !validateIPv6(ipv6_prefix_client)) {
+                    document.getElementById('ipv6_prefix_error').textContent = 'Formato de prefixo IPv6 inválido';
+                    isValid = false;
+                }
+                
+                if (!location_code) {
+                    document.getElementById('location_code_error').textContent = 'Campo obrigatório!';
+                    isValid = false;
+                } else if (location_code.length !== 3 || !/^[A-Z]+$/.test(location_code)) {
+                    document.getElementById('location_code_error').textContent = 'Deve conter exatamente 3 letras!';
+                    isValid = false;
+                }
+                
+                if (!city) {
+                    document.getElementById('city_error').textContent = 'Campo obrigatório!';
+                    isValid = false;
+                }
+                
+                if (!task) {
+                    document.getElementById('task_error').textContent = 'Campo obrigatório!';
+                    isValid = false;
+                } else if (!/^\d+$/.test(task)) {
+                    document.getElementById('task_error').textContent = 'Apenas números são permitidos!';
+                    isValid = false;
+                }
+                
+                if (!isValid) {
+                    return;
+                }
+                
+                try {
+                    const ipv4_info = calculateNetworkAndGateway(ipv4_cliente);
+                    if (!ipv4_info) {
+                        throw new Error("Formato IPv4 inválido. Exemplo: 192.168.1.1/30");
+                    }
+                    
+                    const ipv6_info = ipv6_cliente ? calculateNetworkAndGateway(ipv6_cliente) : null;
+                    
+                    const pppoe_local_ip = ipv4_cliente.split('/')[0];
+                    const pppoe_username = `cust.claro.bb.${location_code.toLowerCase()}`;
+                    const pppoe_password = pppoe_username;
+                    
+                    const snmp_community = "Megal1nkint";
+                    const ssh_port = "5620";
+                    const winbox_port = "5621";
+                    const identity_name = `PI.${location_code}.CPE.COR.CLARO.BB.${city} - ${task} - ${pppoe_local_ip}`;
+                    const output_filename = identity_name.replace(/ /g, "_").replace(/\//g, "-");
+                    
+                    // VLAN config
+                    let vlan_config = "";
+                    if (uplink_interface.startsWith("vlan")) {
+                        const vlan_id = uplink_interface.replace("vlan", "");
+                        vlan_config = `/interface vlan\nadd interface=ether1 name=vlan${vlan_id} vlan-id=${vlan_id}\n\n`;
+                    }
+                    
+                    // IPv6 optional lines
+                    let ipv6_address_line = "";
+                    let ipv6_route_line = "";
+                    let remote_ipv6_prefix_line = "";
+                    
+                    if (ipv6_info && ipv6_prefix_client) {
+                        ipv6_address_line = `/ipv6 address\nadd address=${ipv6_cliente} advertise=no comment=P2P.V6.REGIONAL.${location_code} interface=${uplink_interface}\n`;
+                        ipv6_route_line = `/ipv6 route\nadd distance=1 gateway=${ipv6_info.gateway}\n`;
+                        remote_ipv6_prefix_line = ` remote-ipv6-prefix=${ipv6_prefix_client}`;
+                    }
+                    
+                    const config = `${vlan_config}/interface bridge
+add name=Lo0
+
+/interface ethernet
+set [ find default-name=${uplink_interface.split('.')[0] || uplink_interface} ] comment=UPL.MEGALINK.VIA.GPON
+set [ find default-name=${customer_interface} ] comment=CUST.BANCO.DO.BRASIL
+
+/ppp profile
+add name=pppoe_profile
+
+/snmp community
+set [ find default=yes ] name=${snmp_community}
+
+/interface pppoe-server server
+add default-profile=pppoe_profile disabled=no interface=${customer_interface} one-session-per-host=yes service-name=pppoe_service
+
+/ip address
+add address=${ipv4_cliente} comment=P2P.V4.REGIONAL.${location_code} interface=${uplink_interface} network=${ipv4_info.network}
+
+/ip dns
+set servers=168.90.90.20,168.90.90.21,2804:2d40::168:90:90:20,2804:2d40::168:90:90:21
+
+/ip firewall address-list
+add address=187.62.153.254 comment=Megalink list=gerenciamento
+add address=168.90.91.174 comment=Megalink list=gerenciamento
+add address=100.65.96.2 comment="Proxy Floriano" list=snmp
+add address=100.65.96.10 comment="Proxy Picos" list=snmp
+add address=100.65.96.14 comment="Proxy Megalink" list=snmp
+add address=100.65.96.118 comment="Proxy Picos" list=snmp
+add address=0.0.0.0/8 list=bogons
+add address=127.0.0.0/8 list=bogons
+add address=224.0.0.0/3 list=bogons
+
+/ip firewall filter
+add action=accept chain=input comment="Liberar OSPF" protocol=ospf
+add action=accept chain=input comment="Liberar SNMP" dst-port=161 protocol=udp src-address-list=snmp
+add action=accept chain=input comment=Gerenciamento src-address-list=gerenciamento
+add action=accept chain=input comment="aceita conexoes estabelecidas" connection-state=established
+add action=accept chain=input comment="libera icmp" protocol=icmp
+add action=accept chain=input comment="libera protocolo gre" protocol=gre
+add action=accept chain=input comment="Libera protocolo IPIP" protocol=ipip
+add action=drop chain=input comment="dropa todo o resto" disabled=yes
+add action=drop chain=forward comment="bloqueio de bogons" disabled=yes src-address-list=bogons
+
+/ip route
+add distance=1 gateway=${ipv4_info.gateway}
+
+/ip service
+set telnet disabled=yes
+set ftp disabled=yes
+set www disabled=yes
+set ssh port=${ssh_port}
+set api disabled=yes
+set winbox port=${winbox_port}
+
+/ipv6 firewall filter
+add action=accept chain=input comment="Accept ICMPv6" protocol=icmpv6
+add action=accept chain=forward comment="Forward ICMPv6" protocol=icmpv6
+add action=accept chain=forward comment="Allow established/related forward" \
+
+${ipv6_address_line}${ipv6_route_line}
+
+/ppp secret
+add local-address=${pppoe_local_ip} name=${pppoe_username} password=${pppoe_password} profile=pppoe_profile remote-address=${public_ip_client}${remote_ipv6_prefix_line} service=pppoe
+
+/snmp
+set enabled=yes
+
+/system clock
+set time-zone-name=America/Fortaleza
+
+/system identity
+set name="PI.${location_code}.CPE.COR.CLARO.BB.${city} - ${task} - ${pppoe_local_ip}"
+
+/system ntp client
+set enabled=yes primary-ntp=168.90.91.126 secondary-ntp=172.31.12.58
+`;
+                    
+                    // Display result
+                    resultDiv.textContent = config;
+                    resultDiv.style.display = 'block';
+                    downloadBtn.style.display = 'block';
+                    
+                    // Store for download
+                    downloadBtn.dataset.filename = output_filename;
+                    downloadBtn.dataset.config = config;
+                    
+                    successDiv.textContent = `✅ Configuração gerada com sucesso!`;
+                    
+                } catch (e) {
+                    resultDiv.textContent = `❌ Erro ao gerar configuração: ${e.message}`;
+                    resultDiv.style.display = 'block';
+                    downloadBtn.style.display = 'none';
+                    successDiv.textContent = '';
+                }
+            }
+            
+            function downloadConfig() {
+                const filename = `${downloadBtn.dataset.filename}.rsc`;
+                const config = downloadBtn.dataset.config;
+                
+                const blob = new Blob([config], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 0);
+            }
+        });
+    </script>
+</body>
+</html>
