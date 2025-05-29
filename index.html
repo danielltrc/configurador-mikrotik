@@ -113,8 +113,8 @@
         <div class="section-title">CONFIGURAÇÃO IPv6</div>
         
         <div class="form-group">
-            <label for="ipv6_cliente">4. Endereço IPv6 do Cliente (opcional)</label>
-            <input type="text" id="ipv6_cliente" placeholder="ex: fe80::1/64">
+            <label for="ipv6_cliente">4. Endereço IPv6 Privado do Cliente (opcional)</label>
+            <input type="text" id="ipv6_cliente" placeholder="ex: fe80::1/126">
             <div id="ipv6_error" class="error"></div>
         </div>
         
@@ -122,7 +122,7 @@
         
         <div class="form-group">
             <label for="public_ip_client" class="required">5. IP Público do Cliente</label>
-            <input type="text" id="public_ip_client" placeholder="ex: 200.100.50.25">
+            <input type="text" id="public_ip_client" placeholder="ex: 200.100.50.25/32">
             <div id="public_ip_error" class="error"></div>
         </div>
         
@@ -301,7 +301,7 @@
                 }
                 
                 if (ipv6_cliente && !validateIPv6(ipv6_cliente)) {
-                    document.getElementById('ipv6_error').textContent = 'Formato IPv6 inválido. Exemplo: fe80::1/64';
+                    document.getElementById('ipv6_error').textContent = 'Formato IPv6 inválido. Exemplo: fe80::1/126';
                     isValid = false;
                 }
                 
@@ -361,11 +361,16 @@
                     const identity_name = `PI.${location_code}.CPE.COR.CLARO.BB.${city} - ${task} - ${pppoe_local_ip}`;
                     const output_filename = identity_name.replace(/ /g, "_").replace(/\//g, "-");
                     
-                    // VLAN config
+                    // VLAN config - detect if uplink is a VLAN and create it automatically
                     let vlan_config = "";
-                    if (uplink_interface.startsWith("vlan")) {
-                        const vlan_id = uplink_interface.replace("vlan", "");
-                        vlan_config = `/interface vlan\nadd interface=ether1 name=vlan${vlan_id} vlan-id=${vlan_id}\n\n`;
+                    let physical_interface = uplink_interface;
+                    
+                    if (uplink_interface.toLowerCase().startsWith("vlan")) {
+                        const vlan_id = uplink_interface.replace(/vlan/i, "");
+                        if (/^\d+$/.test(vlan_id)) {
+                            physical_interface = "ether1"; // assuming VLAN is on ether1
+                            vlan_config = `/interface vlan\nadd interface=${physical_interface} name=${uplink_interface} vlan-id=${vlan_id}\n\n`;
+                        }
                     }
                     
                     // IPv6 optional lines
@@ -380,10 +385,10 @@
                     }
                     
                     const config = `${vlan_config}/interface bridge
-add name=Lo0
+add name=Loopback
 
 /interface ethernet
-set [ find default-name=${uplink_interface.split('.')[0] || uplink_interface} ] comment=UPL.MEGALINK.VIA.GPON
+set [ find default-name=${physical_interface} ] comment=UPL.MEGALINK.VIA.GPON
 set [ find default-name=${customer_interface} ] comment=CUST.BANCO.DO.BRASIL
 
 /ppp profile
