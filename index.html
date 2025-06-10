@@ -35,7 +35,7 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        input[type="text"] {
+        input[type="text"], select {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
@@ -110,10 +110,25 @@
             <div id="ipv4_error" class="error"></div>
         </div>
         
+        <div class="form-group">
+            <label for="regional_p2p" class="required">4. Regional P2P</label>
+            <select id="regional_p2p">
+                <option value="">Selecione o regional</option>
+                <option value="AEROPORTO">AEROPORTO</option>
+                <option value="BARREIRAS">BARREIRAS</option>
+                <option value="FLORIANO">FLORIANO</option>
+                <option value="IMPERATRIZ">IMPERATRIZ</option>
+                <option value="LOURIVAL">LOURIVAL</option>
+                <option value="MIRANDA">MIRANDA</option>
+                <option value="PICOS">PICOS</option>
+            </select>
+            <div id="regional_error" class="error"></div>
+        </div>
+        
         <div class="section-title">CONFIGURAÇÃO IPv6</div>
         
         <div class="form-group">
-            <label for="ipv6_cliente">4. Endereço IPv6 Privado do Cliente (opcional)</label>
+            <label for="ipv6_cliente">5. Endereço IPv6 Privado do Cliente (opcional)</label>
             <input type="text" id="ipv6_cliente" placeholder="ex: fe80::1/126">
             <div id="ipv6_error" class="error"></div>
         </div>
@@ -121,33 +136,45 @@
         <div class="section-title">CONFIGURAÇÃO DO CLIENTE</div>
         
         <div class="form-group">
-            <label for="public_ip_client" class="required">5. IP Público do Cliente</label>
-            <input type="text" id="public_ip_client" placeholder="ex: 200.100.50.25/32">
+            <label for="public_ip_client" class="required">6. IP Público do Cliente</label>
+            <input type="text" id="public_ip_client" placeholder="ex: 200.100.50.25 (sem máscara)">
             <div id="public_ip_error" class="error"></div>
         </div>
         
         <div class="form-group">
-            <label for="ipv6_prefix_client">6. Prefixo IPv6 do Cliente (opcional)</label>
+            <label for="ipv6_prefix_client">7. Prefixo IPv6 do Cliente (opcional)</label>
             <input type="text" id="ipv6_prefix_client" placeholder="ex: 2001:db8:abcd::/64">
             <div id="ipv6_prefix_error" class="error"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="bandwidth_limit">8. Limite de Banda (opcional - formato: XM/YM)</label>
+            <input type="text" id="bandwidth_limit" placeholder="ex: 10M/10M para 10Mbps up/down">
+            <div id="bandwidth_error" class="error"></div>
         </div>
         
         <div class="section-title">IDENTIFICAÇÃO</div>
         
         <div class="form-group">
-            <label for="location_code" class="required">7. Código da Localização</label>
+            <label for="identity_name" class="required">9. Nome da Identity</label>
+            <input type="text" id="identity_name" placeholder="ex: PI.FLN.CPE.COR.CLARO.BB.TERESINA - 12345 - 192.168.1.1">
+            <div id="identity_error" class="error"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="location_code" class="required">10. Código da Localização</label>
             <input type="text" id="location_code" placeholder="3 letras, ex: FLN" maxlength="3">
             <div id="location_code_error" class="error"></div>
         </div>
         
         <div class="form-group">
-            <label for="city" class="required">8. Nome da Cidade</label>
+            <label for="city" class="required">11. Nome da Cidade</label>
             <input type="text" id="city" placeholder="ex: TERESINA">
             <div id="city_error" class="error"></div>
         </div>
         
         <div class="form-group">
-            <label for="task" class="required">9. Número da Tarefa</label>
+            <label for="task" class="required">12. Número da Tarefa</label>
             <input type="text" id="task" placeholder="apenas números">
             <div id="task_error" class="error"></div>
         </div>
@@ -173,7 +200,7 @@
             function validateIPv4(ip) {
                 try {
                     const [address, prefix] = ip.split('/');
-                    if (!address || !prefix) return false;
+                    if (!address) return false;
                     
                     const parts = address.split('.');
                     if (parts.length !== 4) return false;
@@ -183,8 +210,11 @@
                         if (isNaN(num) || num < 0 || num > 255) return false;
                     }
                     
-                    const prefixNum = parseInt(prefix, 10);
-                    if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 32) return false;
+                    // O prefixo é opcional para IP público
+                    if (prefix) {
+                        const prefixNum = parseInt(prefix, 10);
+                        if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 32) return false;
+                    }
                     
                     return true;
                 } catch {
@@ -193,7 +223,7 @@
             }
             
             function validateIPv6(ip) {
-                if (!ip) return true; // optional field
+                if (!ip) return true; // Campo opcional
                 
                 try {
                     const [address, prefix] = ip.split('/');
@@ -202,7 +232,7 @@
                     const prefixNum = parseInt(prefix, 10);
                     if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 128) return false;
                     
-                    // Basic IPv6 validation (simplified)
+                    // Validação IPv6 básica (simplificada)
                     const parts = address.split(':');
                     if (parts.length < 3 || parts.length > 8) return false;
                     
@@ -212,74 +242,66 @@
                 }
             }
             
-            function validateIP(ip) {
-                if (!ip) return false;
-                return validateIPv4(ip) || validateIPv6(ip);
+            function validateBandwidth(bw) {
+                if (!bw) return true; // Campo opcional
+                
+                const bwRegex = /^(\d+)([KMGT])\/(\d+)([KMGT])$/i;
+                return bwRegex.test(bw);
             }
             
-            function calculateNetworkAndGateway(ipAddress) {
-                if (!ipAddress) return null;
+            function calculateIPv6Gateway(ipv6Address) {
+                if (!ipv6Address) return null;
                 
                 try {
-                    // IPv4 handling
-                    if (ipAddress.includes('.')) {
-                        const [ip, prefix] = ipAddress.split('/');
-                        const prefixNum = parseInt(prefix, 10);
-                        
-                        const ipParts = ip.split('.').map(Number);
-                        const ipNumber = (ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3];
-                        
-                        const mask = 0xFFFFFFFF << (32 - prefixNum);
-                        const networkNumber = ipNumber & mask;
-                        
-                        const networkAddress = [
-                            (networkNumber >>> 24) & 0xFF,
-                            (networkNumber >>> 16) & 0xFF,
-                            (networkNumber >>> 8) & 0xFF,
-                            networkNumber & 0xFF
-                        ].join('.');
-                        
-                        const gatewayNumber = networkNumber + 1;
-                        const gatewayAddress = [
-                            (gatewayNumber >>> 24) & 0xFF,
-                            (gatewayNumber >>> 16) & 0xFF,
-                            (gatewayNumber >>> 8) & 0xFF,
-                            gatewayNumber & 0xFF
-                        ].join('.');
-                        
-                        return {
-                            network: networkAddress,
-                            gateway: gatewayAddress
-                        };
+                    const [address, prefix] = ipv6Address.split('/');
+                    if (!address || !prefix) return null;
+                    
+                    // Abordagem simplista - decremento último hexteto por 1
+                    const parts = address.split(':');
+                    let lastPart = parts[parts.length - 1];
+                    
+                    if (lastPart.includes('.')) {
+                        // Endereço IPv4-mapeado IPv6
+                        const ipv4Parts = lastPart.split('.');
+                        const lastOctet = parseInt(ipv4Parts[3], 10);
+                        if (lastOctet > 0) {
+                            ipv4Parts[3] = (lastOctet - 1).toString();
+                            parts[parts.length - 1] = ipv4Parts.join('.');
+                        }
+                    } else {
+                        // Endereço IPv6 regular
+                        const lastHextet = parseInt(lastPart, 16);
+                        if (lastHextet > 0) {
+                            parts[parts.length - 1] = (lastHextet - 1).toString(16);
+                        }
                     }
                     
-                    // IPv6 handling (simplified)
-                    return {
-                        network: ipAddress.split('/')[0],
-                        gateway: ipAddress.split('/')[0]
-                    };
+                    return parts.join(':');
                 } catch (e) {
-                    console.error("Error calculating network/gateway:", e);
+                    console.error("Error calculating IPv6 gateway:", e);
                     return null;
                 }
             }
             
             function generateConfig() {
-                // Reset errors
+                // Redefinir erros
                 document.querySelectorAll('.error').forEach(el => el.textContent = '');
                 
-                // Get values
+                // Obter valores
                 const uplink_interface = document.getElementById('uplink_interface').value.trim();
                 const customer_interface = document.getElementById('customer_interface').value.trim();
                 const ipv4_cliente = document.getElementById('ipv4_cliente').value.trim();
+                const regional_p2p = document.getElementById('regional_p2p').value;
                 const ipv6_cliente = document.getElementById('ipv6_cliente').value.trim() || null;
                 const public_ip_client = document.getElementById('public_ip_client').value.trim();
                 const ipv6_prefix_client = document.getElementById('ipv6_prefix_client').value.trim() || null;
+                const bandwidth_limit = document.getElementById('bandwidth_limit').value.trim() || null;
+                const identity_name = document.getElementById('identity_name').value.trim();
                 const location_code = document.getElementById('location_code').value.trim().toUpperCase();
                 const city = document.getElementById('city').value.trim().toUpperCase();
                 const task = document.getElementById('task').value.trim();
                 
-                // Validate required fields
+                // Validação de campos obrigatórios
                 let isValid = true;
                 
                 if (!uplink_interface) {
@@ -300,6 +322,11 @@
                     isValid = false;
                 }
                 
+                if (!regional_p2p) {
+                    document.getElementById('regional_error').textContent = 'Selecione o regional P2P!';
+                    isValid = false;
+                }
+                
                 if (ipv6_cliente && !validateIPv6(ipv6_cliente)) {
                     document.getElementById('ipv6_error').textContent = 'Formato IPv6 inválido. Exemplo: fe80::1/126';
                     isValid = false;
@@ -308,13 +335,23 @@
                 if (!public_ip_client) {
                     document.getElementById('public_ip_error').textContent = 'Campo obrigatório!';
                     isValid = false;
-                } else if (!validateIPv4(public_ip_client) && !validateIPv6(public_ip_client)) {
-                    document.getElementById('public_ip_error').textContent = 'Formato de IP inválido';
+                } else if (!validateIPv4(public_ip_client.split('/')[0])) {
+                    document.getElementById('public_ip_error').textContent = 'Formato de IP inválido. Exemplo: 200.100.50.25';
                     isValid = false;
                 }
                 
                 if (ipv6_prefix_client && !validateIPv6(ipv6_prefix_client)) {
                     document.getElementById('ipv6_prefix_error').textContent = 'Formato de prefixo IPv6 inválido';
+                    isValid = false;
+                }
+                
+                if (bandwidth_limit && !validateBandwidth(bandwidth_limit)) {
+                    document.getElementById('bandwidth_error').textContent = 'Formato inválido. Use XM/YM (ex: 10M/10M)';
+                    isValid = false;
+                }
+                
+                if (!identity_name) {
+                    document.getElementById('identity_error').textContent = 'Campo obrigatório!';
                     isValid = false;
                 }
                 
@@ -349,7 +386,10 @@
                         throw new Error("Formato IPv4 inválido. Exemplo: 192.168.1.1/30");
                     }
                     
-                    const ipv6_info = ipv6_cliente ? calculateNetworkAndGateway(ipv6_cliente) : null;
+                    const ipv6_info = ipv6_cliente ? {
+                        network: ipv6_cliente.split('/')[0],
+                        gateway: calculateIPv6Gateway(ipv6_cliente)
+                    } : null;
                     
                     const pppoe_local_ip = ipv4_cliente.split('/')[0];
                     const pppoe_username = `cust.claro.bb.${location_code.toLowerCase()}`;
@@ -358,30 +398,40 @@
                     const snmp_community = "Megal1nkint";
                     const ssh_port = "5620";
                     const winbox_port = "5621";
-                    const identity_name = `PI.${location_code}.CPE.COR.CLARO.BB.${city} - ${task} - ${pppoe_local_ip}`;
                     const output_filename = identity_name.replace(/ /g, "_").replace(/\//g, "-");
                     
-                    // VLAN config - detect if uplink is a VLAN and create it automatically
+                    // VLAN config - Detecta se o uplink é uma vlan e a cria automaticamente
                     let vlan_config = "";
                     let physical_interface = uplink_interface;
                     
                     if (uplink_interface.toLowerCase().startsWith("vlan")) {
                         const vlan_id = uplink_interface.replace(/vlan/i, "");
                         if (/^\d+$/.test(vlan_id)) {
-                            physical_interface = "ether1"; // assuming VLAN is on ether1
+                            physical_interface = "ether1"; // Adiciona vlan na ether1
                             vlan_config = `/interface vlan\nadd interface=${physical_interface} name=${uplink_interface} vlan-id=${vlan_id}\n\n`;
                         }
                     }
                     
-                    // IPv6 optional lines
+                    // Linhas opcionais do IPv6
                     let ipv6_address_line = "";
                     let ipv6_route_line = "";
                     let remote_ipv6_prefix_line = "";
                     
                     if (ipv6_info && ipv6_prefix_client) {
-                        ipv6_address_line = `/ipv6 address\nadd address=${ipv6_cliente} advertise=no comment=P2P.V6.REGIONAL.${location_code} interface=${uplink_interface}\n`;
-                        ipv6_route_line = `/ipv6 route\nadd distance=1 gateway=${ipv6_info.gateway}\n`;
+                        ipv6_address_line = `/ipv6 address\nadd address=${ipv6_cliente} advertise=no comment=P2P.V6.${regional_p2p}.${location_code} interface=${uplink_interface}\n`;
+                        if (ipv6_info.gateway) {
+                            ipv6_route_line = `/ipv6 route\nadd distance=1 gateway=${ipv6_info.gateway}\n`;
+                        }
                         remote_ipv6_prefix_line = ` remote-ipv6-prefix=${ipv6_prefix_client}`;
+                    }
+                    
+                    // Configuração do controle de Banda
+                    let bandwidth_config = "";
+                    if (bandwidth_limit) {
+                        const [upload, download] = bandwidth_limit.split('/');
+                        bandwidth_config = `
+/queue simple
+add name="LIMITE_${location_code}" target=${customer_interface} max-limit=${download} upload=${upload} comment="LIMITE_DE_BANDA_${location_code}"`;
                     }
                     
                     const config = `${vlan_config}/interface bridge
@@ -401,7 +451,7 @@ set [ find default=yes ] name=${snmp_community}
 add default-profile=pppoe_profile disabled=no interface=${customer_interface} one-session-per-host=yes service-name=pppoe_service
 
 /ip address
-add address=${ipv4_cliente} comment=P2P.V4.REGIONAL.${location_code} interface=${uplink_interface} network=${ipv4_info.network}
+add address=${ipv4_cliente} comment=P2P.V4.REGIONAL.${regional_p2p} interface=${uplink_interface} network=${ipv4_info.network}
 
 /ip dns
 set servers=168.90.90.20,168.90.90.21,2804:2d40::168:90:90:20,2804:2d40::168:90:90:21
@@ -444,7 +494,7 @@ add action=accept chain=input comment="Accept ICMPv6" protocol=icmpv6
 add action=accept chain=forward comment="Forward ICMPv6" protocol=icmpv6
 add action=accept chain=forward comment="Allow established/related forward" \
 
-${ipv6_address_line}${ipv6_route_line}
+${ipv6_address_line}${ipv6_route_line}${bandwidth_config}
 
 /ppp secret
 add local-address=${pppoe_local_ip} name=${pppoe_username} password=${pppoe_password} profile=pppoe_profile remote-address=${public_ip_client}${remote_ipv6_prefix_line} service=pppoe
@@ -456,18 +506,18 @@ set enabled=yes
 set time-zone-name=America/Fortaleza
 
 /system identity
-set name="PI.${location_code}.CPE.COR.CLARO.BB.${city} - ${task} - ${pppoe_local_ip}"
+set name="${identity_name}"
 
 /system ntp client
 set enabled=yes primary-ntp=168.90.91.126 secondary-ntp=172.31.12.58
 `;
                     
-                    // Display result
+                    // Mostrar resultados
                     resultDiv.textContent = config;
                     resultDiv.style.display = 'block';
                     downloadBtn.style.display = 'block';
                     
-                    // Store for download
+                    // Botão de download
                     downloadBtn.dataset.filename = output_filename;
                     downloadBtn.dataset.config = config;
                     
@@ -478,6 +528,53 @@ set enabled=yes primary-ntp=168.90.91.126 secondary-ntp=172.31.12.58
                     resultDiv.style.display = 'block';
                     downloadBtn.style.display = 'none';
                     successDiv.textContent = '';
+                }
+            }
+            
+            function calculateNetworkAndGateway(ipAddress) {
+                if (!ipAddress) return null;
+                
+                try {
+                    // Manuseio IPv4
+                    if (ipAddress.includes('.')) {
+                        const [ip, prefix] = ipAddress.split('/');
+                        const prefixNum = parseInt(prefix, 10);
+                        
+                        const ipParts = ip.split('.').map(Number);
+                        const ipNumber = (ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3];
+                        
+                        const mask = 0xFFFFFFFF << (32 - prefixNum);
+                        const networkNumber = ipNumber & mask;
+                        
+                        const networkAddress = [
+                            (networkNumber >>> 24) & 0xFF,
+                            (networkNumber >>> 16) & 0xFF,
+                            (networkNumber >>> 8) & 0xFF,
+                            networkNumber & 0xFF
+                        ].join('.');
+                        
+                        const gatewayNumber = networkNumber + 1;
+                        const gatewayAddress = [
+                            (gatewayNumber >>> 24) & 0xFF,
+                            (gatewayNumber >>> 16) & 0xFF,
+                            (gatewayNumber >>> 8) & 0xFF,
+                            gatewayNumber & 0xFF
+                        ].join('.');
+                        
+                        return {
+                            network: networkAddress,
+                            gateway: gatewayAddress
+                        };
+                    }
+                    
+                    // IPv6 manipulação (simplificada)
+                    return {
+                        network: ipAddress.split('/')[0],
+                        gateway: ipAddress.split('/')[0]
+                    };
+                } catch (e) {
+                    console.error("Error calculating network/gateway:", e);
+                    return null;
                 }
             }
             
@@ -501,5 +598,8 @@ set enabled=yes primary-ntp=168.90.91.126 secondary-ntp=172.31.12.58
             }
         });
     </script>
+             <footer>
+                <center>Desenvolvido por Daniel Silva - Analista de Redes</center>
+            </footer>
 </body>
 </html>
